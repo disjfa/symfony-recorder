@@ -1,0 +1,4 @@
+App\Controller\:
+    resource: ../../src/Controller
+    type: attribute
+
