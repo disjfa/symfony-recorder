@@ -6,10 +6,9 @@ use App\Entity\Video;
 use App\Entity\VideoChunk;
 use App\Message\StitchVideoChunks;
 use App\Repository\VideoRepository;
+use App\Service\VideoFileService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,7 +21,7 @@ class RecordingController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $messageBus,
-        private readonly Filesystem $filesystem,
+        private readonly VideoFileService $videoFileService,
     ) {
     }
 
@@ -68,26 +67,20 @@ class RecordingController extends AbstractController
                 return new JsonResponse(['error' => 'No upload session ID'], Response::HTTP_BAD_REQUEST);
             }
 
-            // Create chunks directory
-            $chunkDir = $this->getParameter('kernel.project_dir').'/public/chunks';
-            $this->filesystem->mkdir($chunkDir, 0755);
-
-            // Generate unique filename for chunk
-            $filename = sprintf('chunk_%s_%d.webm', $uploadSessionId, $chunkNumber);
-
-            // Save chunk file
-            $chunkFile->move($chunkDir, $filename);
-            $filePath = $chunkDir.'/'.$filename;
-
-            // Use Symfony File class to get file information
-            $uploadedFile = new File($filePath);
+            // Save chunk file using the service
+            $fileSize = $this->videoFileService->saveChunk(
+                $uploadSessionId,
+                $chunkNumber,
+                $chunkFile->getContent(),
+            );
+            $relativePath = $this->videoFileService->getChunkRelativePath($uploadSessionId, $chunkNumber);
 
             // Create VideoChunk entity
             $chunk = new VideoChunk();
             $chunk->setUploadSessionId(Uuid::fromString($uploadSessionId));
             $chunk->setChunkNumber($chunkNumber);
-            $chunk->setFilePath('/chunks/'.$filename);
-            $chunk->setFileSize($uploadedFile->getSize());
+            $chunk->setFilePath($relativePath);
+            $chunk->setFileSize($fileSize);
             $chunk->setTitle($title);
             $chunk->setDescription($description);
             $chunk->setIsLast($isLast);
@@ -116,11 +109,7 @@ class RecordingController extends AbstractController
     #[Route('/video/{id}/delete', name: 'app_delete_video', methods: ['GET'])]
     public function deleteVideo(Video $video): JsonResponse
     {
-        // Delete the file
-        $filePath = $this->getParameter('kernel.project_dir').'/public'.$video->getFilePath();
-        if ($this->filesystem->exists($filePath)) {
-            $this->filesystem->remove($filePath);
-        }
+        $this->videoFileService->deleteVideo($video->getFilePath());
 
         $this->entityManager->remove($video);
         $this->entityManager->flush();

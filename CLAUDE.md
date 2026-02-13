@@ -40,6 +40,7 @@ src/
 ├── Message/              # Messenger messages (StitchVideoChunks, DeleteTaskWithVideo, CleanupVideoChunks)
 ├── MessageHandler/       # Messenger handlers for async processing
 ├── Repository/           # Doctrine repositories
+├── Service/              # Business logic services (VideoFileService for file operations)
 └── Traits/               # Reusable traits (TimestampableTrait with lifecycle callbacks)
 
 templates/
@@ -104,6 +105,26 @@ var/
 - `filePath` (string) - path to chunk file
 - `createdAt` (datetime via TimestampableTrait)
 
+## Services
+
+### VideoFileService (`src/Service/VideoFileService.php`)
+
+Handles all file operations for video chunks and final video files using Symfony Filesystem component.
+
+**Key Methods:**
+- `saveChunk(string $sessionId, int $chunkNumber, string $content): int` - Save chunk and return file size
+- `stitchChunks(array $chunkPaths): array` - Concatenate chunks into final video
+- `deleteVideo(string $videoPath): void` - Delete video file
+- `deleteChunksForSession(string $sessionId): int` - Delete all chunks for a session
+- `getChunkRelativePath()`, `getChunkAbsolutePath()` - Path helpers
+- `getVideoAbsolutePath()` - Convert relative path to absolute
+
+**Why Separate Service:**
+- Centralizes file handling logic
+- Easy to test with mock filesystem
+- Configuration via environment variables
+- Reusable across controllers and handlers
+
 ## Async Message Processing
 
 The application uses Symfony Messenger for async video processing:
@@ -112,13 +133,13 @@ The application uses Symfony Messenger for async video processing:
 
 1. **StitchVideoChunks** → **StitchVideoChunksHandler**
    - Triggered when all chunks are uploaded (`isLast` is true)
-   - Stitches chunks into final video file
+   - Stitches chunks into final video file using VideoFileService
    - Stores video metadata in database
 
 2. **DeleteTaskWithVideo** → **DeleteTaskWithVideoHandler**
    - Triggered when task is deleted
-   - Removes video file from disk
-   - Removes associated chunks
+   - Removes video file from disk using VideoFileService
+   - Removes associated database records
 
 3. **CleanupVideoChunks** → **CleanupVideoChunksHandler**
    - Removes temporary chunk files after stitching
@@ -131,6 +152,16 @@ Key `.env` variables:
 DATABASE_URL=mysql://user:password@localhost:3306/symfony_recorder
 MESSENGER_TRANSPORT_DSN=doctrine://default
 ```
+
+**File Path Configuration:**
+The `CHUNKS_DIR` and `VIDEOS_DIR` paths are configured in `config/services.yaml` as service container parameters:
+```yaml
+parameters:
+    chunks_dir: '%kernel.project_dir%/public/chunks'
+    videos_dir: '%kernel.project_dir%/public/videos'
+```
+
+These are injected into `VideoFileService` constructor for absolute, reliable path resolution.
 
 ## API Endpoints
 

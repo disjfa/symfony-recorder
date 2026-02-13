@@ -4,9 +4,9 @@ namespace App\MessageHandler;
 
 use App\Message\CleanupVideoChunks;
 use App\Repository\VideoChunkRepository;
+use App\Service\VideoFileService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
@@ -16,8 +16,7 @@ class CleanupVideoChunksHandler
         private readonly VideoChunkRepository $chunkRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
-        private readonly Filesystem $filesystem,
-        private readonly string $projectDir,
+        private readonly VideoFileService $videoFileService,
     ) {
     }
 
@@ -36,21 +35,11 @@ class CleanupVideoChunksHandler
             return;
         }
 
-        $deletedFiles = 0;
-        $deletedRecords = 0;
-
         // Delete chunk files from filesystem
-        foreach ($chunks as $chunk) {
-            $chunkPath = $this->projectDir.'/public'.$chunk->getFilePath();
-
-            if ($this->filesystem->exists($chunkPath)) {
-                $this->filesystem->remove($chunkPath);
-                ++$deletedFiles;
-                $this->logger->debug('Deleted chunk file: '.$chunk->getChunkNumber());
-            }
-        }
+        $deletedFiles = $this->videoFileService->deleteChunksForSession($uploadSessionId->toRfc4122());
 
         // Remove chunk entities from database
+        $deletedRecords = 0;
         foreach ($chunks as $chunk) {
             $this->entityManager->remove($chunk);
             ++$deletedRecords;
