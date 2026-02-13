@@ -8,6 +8,8 @@ use App\Message\StitchVideoChunks;
 use App\Repository\VideoRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,6 +22,7 @@ class RecordingController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $messageBus,
+        private readonly Filesystem $filesystem,
     ) {
     }
 
@@ -67,23 +70,24 @@ class RecordingController extends AbstractController
 
             // Create chunks directory
             $chunkDir = $this->getParameter('kernel.project_dir').'/public/chunks';
-            if (!is_dir($chunkDir) && !mkdir($chunkDir, 0755, true) && !is_dir($chunkDir)) {
-                throw new \RuntimeException(sprintf('Directory "%s" was not created', $chunkDir));
-            }
+            $this->filesystem->mkdir($chunkDir, 0755);
 
             // Generate unique filename for chunk
             $filename = sprintf('chunk_%s_%d.webm', $uploadSessionId, $chunkNumber);
-            $filePath = $chunkDir.'/'.$filename;
 
             // Save chunk file
             $chunkFile->move($chunkDir, $filename);
+            $filePath = $chunkDir.'/'.$filename;
+
+            // Use Symfony File class to get file information
+            $uploadedFile = new File($filePath);
 
             // Create VideoChunk entity
             $chunk = new VideoChunk();
             $chunk->setUploadSessionId(Uuid::fromString($uploadSessionId));
             $chunk->setChunkNumber($chunkNumber);
             $chunk->setFilePath('/chunks/'.$filename);
-            $chunk->setFileSize(filesize($filePath));
+            $chunk->setFileSize($uploadedFile->getSize());
             $chunk->setTitle($title);
             $chunk->setDescription($description);
             $chunk->setIsLast($isLast);
@@ -114,8 +118,8 @@ class RecordingController extends AbstractController
     {
         // Delete the file
         $filePath = $this->getParameter('kernel.project_dir').'/public'.$video->getFilePath();
-        if (file_exists($filePath)) {
-            unlink($filePath);
+        if ($this->filesystem->exists($filePath)) {
+            $this->filesystem->remove($filePath);
         }
 
         $this->entityManager->remove($video);

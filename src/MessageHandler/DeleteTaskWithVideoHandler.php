@@ -6,6 +6,7 @@ use App\Message\DeleteTaskWithVideo;
 use App\Repository\TaskRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
@@ -15,6 +16,7 @@ class DeleteTaskWithVideoHandler
         private readonly TaskRepository $taskRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly Filesystem $filesystem,
         private readonly string $projectDir,
     ) {
     }
@@ -50,8 +52,8 @@ class DeleteTaskWithVideoHandler
 
         // Delete the video file from filesystem
         $filePath = $this->projectDir.'/public'.$video->getFilePath();
-        if (file_exists($filePath)) {
-            unlink($filePath);
+        if ($this->filesystem->exists($filePath)) {
+            $this->filesystem->remove($filePath);
             $this->logger->info('Deleted video file: '.$filePath);
         } else {
             $this->logger->warning('Video file not found: '.$filePath);

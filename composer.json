@@ -15,6 +15,7 @@
         "symfony/console": "7.4.*",
         "symfony/doctrine-messenger": "7.4.*",
         "symfony/dotenv": "7.4.*",
+        "symfony/filesystem": "7.4.*",
         "symfony/flex": "^2",
         "symfony/form": "7.4.*",
         "symfony/framework-bundle": "7.4.*",
@@ -67,6 +68,14 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
+        ],
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "npx concurrently -c \"#93c5fd,#c4b5fd\" \"symfony serve\" \"bin/console messenger:consume async -vv\" --names=server,messenger"
+        ],
+        "pre-commit": [
+            "bin/console lint:twig templates",
+            "php-cs-fixer fix"
         ]
     },
     "conflict": {

@@ -6,6 +6,7 @@ use App\Message\CleanupVideoChunks;
 use App\Repository\VideoChunkRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
@@ -15,6 +16,7 @@ class CleanupVideoChunksHandler
         private readonly VideoChunkRepository $chunkRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly Filesystem $filesystem,
         private readonly string $projectDir,
     ) {
     }
@@ -41,8 +43,8 @@ class CleanupVideoChunksHandler
         foreach ($chunks as $chunk) {
             $chunkPath = $this->projectDir.'/public'.$chunk->getFilePath();
 
-            if (file_exists($chunkPath)) {
-                unlink($chunkPath);
+            if ($this->filesystem->exists($chunkPath)) {
+                $this->filesystem->remove($chunkPath);
                 ++$deletedFiles;
                 $this->logger->debug('Deleted chunk file: '.$chunk->getChunkNumber());
             }

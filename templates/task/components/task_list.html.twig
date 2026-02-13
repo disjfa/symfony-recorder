@@ -18,15 +18,15 @@
                         <div class="mb-3">
                             {% if task.priority == 'high' %}
                                 <span class="badge bg-danger">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> High Priority
+                                    <i class="fa-solid fa-triangle-exclamation"></i> High Priority
                                 </span>
                             {% elseif task.priority == 'medium' %}
                                 <span class="badge bg-warning">
-                                    <i class="bi bi-dash-circle"></i> Medium Priority
+                                    <i class="fa-solid fa-minus-circle"></i> Medium Priority
                                 </span>
                             {% else %}
                                 <span class="badge bg-success">
-                                    <i class="bi bi-check-circle"></i> Low Priority
+                                    <i class="fa-solid fa-circle-check"></i> Low Priority
                                 </span>
                             {% endif %}
                         </div>
@@ -80,4 +80,3 @@
         </p>
     </div>
 {% endif %}
-

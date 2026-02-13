@@ -9,6 +9,8 @@ use App\Message\StitchVideoChunks;
 use App\Repository\VideoChunkRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -20,6 +22,7 @@ class StitchVideoChunksHandler
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
         private readonly MessageBusInterface $messageBus,
+        private readonly Filesystem $filesystem,
         private readonly string $projectDir,
     ) {
     }
@@ -46,40 +49,34 @@ class StitchVideoChunksHandler
 
         // Create output directory
         $videoDir = $this->projectDir.'/public/videos';
-        if (!is_dir($videoDir) && !mkdir($videoDir, 0755, true) && !is_dir($videoDir)) {
-            throw new \RuntimeException(sprintf('Directory "%s" was not created', $videoDir));
-        }
+        $this->filesystem->mkdir($videoDir, 0755);
 
         // Generate unique filename for final video
         $filename = 'video_'.uniqid('', true).'.webm';
         $outputPath = $videoDir.'/'.$filename;
 
         try {
-            // Open output file for writing
-            $outputHandle = fopen($outputPath, 'wb');
-            if (!$outputHandle) {
-                throw new \RuntimeException('Failed to open output file');
-            }
-
+            // Concatenate all chunks
+            $outputContent = '';
             $totalSize = 0;
 
-            // Concatenate all chunks
             foreach ($chunks as $chunk) {
                 $chunkPath = $this->projectDir.'/public'.$chunk->getFilePath();
 
-                if (!file_exists($chunkPath)) {
+                if (!$this->filesystem->exists($chunkPath)) {
                     $this->logger->error('Chunk file not found: '.$chunkPath);
                     continue;
                 }
 
-                $chunkContent = file_get_contents($chunkPath);
-                fwrite($outputHandle, $chunkContent);
+                $chunkFile = new File($chunkPath);
+                $chunkContent = $chunkFile->getContent();
+                $outputContent .= $chunkContent;
                 $totalSize += $chunk->getFileSize();
 
                 $this->logger->debug('Processed chunk: '.$chunk->getChunkNumber());
             }
 
-            fclose($outputHandle);
+            $this->filesystem->dumpFile($outputPath, $outputContent);
 
             $this->logger->info('Video stitching complete. Total size: '.$totalSize.' bytes');
 
@@ -110,8 +107,8 @@ class StitchVideoChunksHandler
             $this->logger->error('Error stitching video: '.$e->getMessage());
 
             // Clean up output file if it exists
-            if (isset($outputPath) && file_exists($outputPath)) {
-                unlink($outputPath);
+            if (isset($outputPath)) {
+                $this->filesystem->remove($outputPath);
             }
 
             // Dispatch cleanup message to remove failed chunks
